@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const shaderc = @import("shaderc.zig");
 const png = @import("png.zig");
 
@@ -18,7 +18,7 @@ pub const Renderer = struct {
 
     initialized: bool = false,
 
-    alloc: *std.mem.Allocator,
+    alloc: std.mem.Allocator,
 
     device: c.WGPUDeviceId,
     queue: c.WGPUQueueId,
@@ -49,7 +49,7 @@ pub const Renderer = struct {
     opt_offset_samples: u32,
 
     pub fn init(
-        alloc: *std.mem.Allocator,
+        alloc: std.mem.Allocator,
         scene: Scene,
         options: Options,
         device: c.WGPUDeviceId,
@@ -102,7 +102,7 @@ pub const Renderer = struct {
 
             .start_time_ms = 0,
             .last_time_ms = 0,
-            .frame_times_ms = [_]u32{0} ** FRAME_TIME_COUNT,
+            .frame_times_ms = @splat(0),
             .frame_time_index = 0,
 
             .opt_time_ms = 0,
@@ -156,7 +156,7 @@ pub const Renderer = struct {
             self.queue,
             self.uniform_buf,
             0,
-            @ptrCast([*c]const u8, &self.uniforms),
+            @as([*c]const u8, @ptrCast(&self.uniforms)),
             @sizeOf(c.rayUniforms),
         );
     }
@@ -165,9 +165,9 @@ pub const Renderer = struct {
         var changed = false;
         const width = c.igGetWindowWidth();
         c.igPushItemWidth(width * 0.5);
-        changed = c.igDragFloat3("pos", @ptrCast([*c]f32, &self.uniforms.camera.pos), 0.05, -10, 10, "%.1f", 0) or changed;
-        changed = c.igDragFloat3("target", @ptrCast([*c]f32, &self.uniforms.camera.target), 0.05, -10, 10, "%.1f", 0) or changed;
-        changed = c.igDragFloat3("up", @ptrCast([*c]f32, &self.uniforms.camera.up), 0.1, -1, 1, "%.1f", 0) or changed;
+        changed = c.igDragFloat3("pos", @as([*c]f32, @ptrCast(&self.uniforms.camera.pos)), 0.05, -10, 10, "%.1f", 0) or changed;
+        changed = c.igDragFloat3("target", @as([*c]f32, @ptrCast(&self.uniforms.camera.target)), 0.05, -10, 10, "%.1f", 0) or changed;
+        changed = c.igDragFloat3("up", @as([*c]f32, @ptrCast(&self.uniforms.camera.up)), 0.1, -1, 1, "%.1f", 0) or changed;
         changed = c.igDragFloat("perspective", &self.uniforms.camera.perspective, 0.01, 0, 1, "%.2f", 0) or changed;
         changed = c.igDragFloat("defocus", &self.uniforms.camera.defocus, 0.0001, 0, 0.1, "%.4f", 0) or changed;
         changed = c.igDragFloat("focal length", &self.uniforms.camera.focal_distance, 0.01, 0, 10, "%.2f", 0) or changed;
@@ -191,9 +191,9 @@ pub const Renderer = struct {
         const window_size = c.igGetIO().*.DisplaySize;
         const max_width = window_size.x / 2;
         const height = window_size.y - menu_height;
-        c.rrIgSetNextWindowSize(std.math.min(@as(f32, 280), max_width), height, c.ImGuiCond_FirstUseEver);
+        c.rrIgSetNextWindowSize(@min(@as(f32, 280), max_width), height, c.ImGuiCond_FirstUseEver);
         // Also recover a narrow layout saved by the old ARM64 ABI bug.
-        c.rrIgSetNextWindowSizeConstraints(std.math.min(@as(f32, 220), max_width), height, max_width, height);
+        c.rrIgSetNextWindowSizeConstraints(@min(@as(f32, 220), max_width), height, max_width, height);
         const flags = c.ImGuiWindowFlags_NoTitleBar |
             c.ImGuiWindowFlags_NoMove |
             c.ImGuiWindowFlags_NoCollapse;
@@ -257,7 +257,7 @@ pub const Renderer = struct {
                         self.image_buf,
                         self.image_buf_size,
                     );
-                    self.opt_time_ms = std.time.milliTimestamp();
+                    self.opt_time_ms = @import("runtime.zig").milliseconds();
                     self.opt_offset_samples = self.uniforms.samples;
                 }
                 comp.deinit();
@@ -265,20 +265,20 @@ pub const Renderer = struct {
             }
         }
 
-        const width = @floatToInt(u32, viewport.width);
-        const height = @floatToInt(u32, viewport.height);
+        const width = @as(u32, @intFromFloat(viewport.width));
+        const height = @as(u32, @intFromFloat(viewport.height));
         if (width != self.uniforms.width_px or height != self.uniforms.height_px) {
             self.update_size(width, height);
         }
-        self.uniforms.offset_x = @floatToInt(u32, viewport.x);
-        self.uniforms.offset_y = @floatToInt(u32, viewport.y);
+        self.uniforms.offset_x = @as(u32, @intFromFloat(viewport.x));
+        self.uniforms.offset_y = @as(u32, @intFromFloat(viewport.y));
 
         self.update_uniforms();
 
         // Cast another set of rays, one per pixel
         const first = self.uniforms.samples == 0;
         const n = self.uniforms.width_px * self.uniforms.height_px;
-        const nt = (n + c.COMPUTE_SIZE - 1) / c.COMPUTE_SIZE;
+        const nt = (n + c.COMPUTE_SIZE - 1) / @as(u32, c.COMPUTE_SIZE);
         if (self.optimized) |*opt| {
             try opt.render(first, nt, cmd_encoder);
         } else {
@@ -286,13 +286,13 @@ pub const Renderer = struct {
         }
 
         self.blit.draw(viewport, next_texture, cmd_encoder);
-        const now_ms = std.time.milliTimestamp();
+        const now_ms = @import("runtime.zig").milliseconds();
 
         // Record the start time at the first frame, to skip startup time
         if (self.uniforms.samples == 0) {
             self.start_time_ms = now_ms;
         } else if (now_ms >= self.last_time_ms) {
-            const dt = @intCast(u32, now_ms - self.last_time_ms);
+            const dt = @as(u32, @intCast(now_ms - self.last_time_ms));
             // Work around an issue where frames get submitted too fast,
             // which can causes the autoscaler to overestimate its capabilities
             if (dt > 15) {
@@ -321,9 +321,9 @@ pub const Renderer = struct {
                 else => -1,
             };
             if (delta != 0) {
-                const next = @intCast(i32, self.uniforms.samples_per_frame) + delta;
+                const next = @as(i32, @intCast(self.uniforms.samples_per_frame)) + delta;
                 if (next >= 1) {
-                    self.uniforms.samples_per_frame = @intCast(u32, next);
+                    self.uniforms.samples_per_frame = @as(u32, @intCast(next));
                 } else {
                     self.uniforms.samples_per_frame = 1;
                 }
@@ -347,22 +347,22 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn stats(self: *const Self, alloc: *std.mem.Allocator) ![]u8 {
+    pub fn stats(self: *const Self, alloc: std.mem.Allocator) ![:0]u8 {
         var samples = self.uniforms.samples;
         if (self.optimized != null) {
             samples -= self.opt_offset_samples;
         }
-        var start_time_ms = if (self.optimized == null) self.start_time_ms else self.opt_time_ms;
-        var ray_count = @intToFloat(f64, self.uniforms.width_px) *
-            @intToFloat(f64, self.uniforms.height_px) *
-            @intToFloat(f64, self.uniforms.samples);
+        const start_time_ms = if (self.optimized == null) self.start_time_ms else self.opt_time_ms;
+        const ray_count = @as(f64, @floatFromInt(self.uniforms.width_px)) *
+            @as(f64, @floatFromInt(self.uniforms.height_px)) *
+            @as(f64, @floatFromInt(self.uniforms.samples));
 
-        const dt_sec = @intToFloat(f64, std.time.milliTimestamp() - start_time_ms) / 1000.0;
+        const dt_sec = @as(f64, @floatFromInt(@import("runtime.zig").milliseconds() - start_time_ms)) / 1000.0;
 
         var rays_per_sec = ray_count / dt_sec;
-        var rays_per_sec_prefix = prefix(&rays_per_sec);
+        const rays_per_sec_prefix = prefix(&rays_per_sec);
 
-        return try std.fmt.allocPrintZ(
+        return try std.fmt.allocPrintSentinel(
             alloc,
             "{}x | {d:.2} {c}sps | {} spp | {} x {}",
             .{
@@ -373,10 +373,15 @@ pub const Renderer = struct {
                 self.uniforms.width_px,
                 self.uniforms.height_px,
             },
+            0,
         );
     }
 
     pub fn deinit(self: *Self) void {
+        if (self.compiler) |*compiler| {
+            compiler.deinit();
+            self.compiler = null;
+        }
         self.blit.deinit();
         self.preview.deinit();
         if (self.optimized) |*opt| {
@@ -408,7 +413,7 @@ pub const Renderer = struct {
         self.uniforms.samples_per_frame = 1;
         self.frame_time_index = 0;
 
-        self.start_time_ms = std.time.milliTimestamp();
+        self.start_time_ms = @import("runtime.zig").milliseconds();
 
         if (self.initialized) {
             self.blit.bind(self.uniform_buf, self.image_buf, self.image_buf_size);
@@ -461,11 +466,11 @@ pub const Renderer = struct {
             0,
             self.image_buf_size,
         );
-        const data = @ptrCast([*]const f32, @alignCast(4, ptr));
+        const data = @as([*]const f32, @ptrCast(@alignCast(ptr)));
         try png.save_png(
             self.alloc,
             data,
-            @intToFloat(f32, self.uniforms.samples),
+            @as(f32, @floatFromInt(self.uniforms.samples)),
             self.uniforms.width_px,
             self.uniforms.height_px,
         );
@@ -473,4 +478,4 @@ pub const Renderer = struct {
     }
 };
 
-export fn read_buffer_map_cb(status: c.WGPUBufferMapAsyncStatus, userdata: [*c]u8) void {}
+export fn read_buffer_map_cb(_: c.WGPUBufferMapAsyncStatus, _: [*c]u8) void {}

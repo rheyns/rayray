@@ -3,17 +3,21 @@
 // (roughly inspired by imgui_impl_opengl3.cpp)
 const std = @import("std");
 
-const c = @import("../c.zig");
+const c = @import("c");
 const shaderc = @import("../shaderc.zig");
 const util = @import("../util.zig");
 const Font = @import("font.zig").Font;
 
 const FONT_SIZE: u32 = 18;
 
+comptime {
+    if (@sizeOf(c.ImDrawIdx) != 4) @compileError("WebGPU GUI rendering requires 32-bit ImDrawIdx");
+}
+
 pub const Backend = struct {
     const Self = @This();
 
-    alloc: *std.mem.Allocator,
+    alloc: std.mem.Allocator,
     initialized: bool = false,
 
     pixel_density: f32,
@@ -43,10 +47,10 @@ pub const Backend = struct {
 
     render_pipeline: c.WGPURenderPipelineId,
 
-    pub fn init(alloc: *std.mem.Allocator, window: *c.GLFWwindow, device: c.WGPUDeviceId) !Self {
+    pub fn init(alloc: std.mem.Allocator, window: *c.GLFWwindow, device: c.WGPUDeviceId) !Self {
         // TIME FOR WGPU
         var arena = std.heap.ArenaAllocator.init(alloc);
-        const tmp_alloc: *std.mem.Allocator = &arena.allocator;
+        const tmp_alloc: std.mem.Allocator = arena.allocator();
         defer arena.deinit();
 
         // This ImGui version uses its Vulkan entry point for windows without
@@ -54,7 +58,7 @@ pub const Backend = struct {
         _ = c.ImGui_ImplGlfw_InitForVulkan(window, true);
 
         // Use the Inconsolata font for the GUI, instead of Proggy Clean
-        var io = c.igGetIO() orelse std.debug.panic("Could not get io\n", .{});
+        const io = c.igGetIO() orelse std.debug.panic("Could not get io\n", .{});
 
         // We need a non-const pointer here, so duplicate the data (which may
         // be embedded in the executable if this is a release image, so it
@@ -110,16 +114,16 @@ pub const Backend = struct {
         const tex_sampler = c.wgpu_device_create_sampler(device, &(c.WGPUSamplerDescriptor){
             .next_in_chain = null,
             .label = "gui tex sampler",
-            .address_mode_u = c.WGPUAddressMode._ClampToEdge,
-            .address_mode_v = c.WGPUAddressMode._ClampToEdge,
-            .address_mode_w = c.WGPUAddressMode._ClampToEdge,
-            .mag_filter = c.WGPUFilterMode._Nearest,
-            .min_filter = c.WGPUFilterMode._Nearest,
-            .mipmap_filter = c.WGPUFilterMode._Nearest,
+            .address_mode_u = c.WGPUAddressMode_ClampToEdge,
+            .address_mode_v = c.WGPUAddressMode_ClampToEdge,
+            .address_mode_w = c.WGPUAddressMode_ClampToEdge,
+            .mag_filter = c.WGPUFilterMode_Nearest,
+            .min_filter = c.WGPUFilterMode_Nearest,
+            .mipmap_filter = c.WGPUFilterMode_Nearest,
             .lod_min_clamp = 0.0,
-            .lod_max_clamp = std.math.f32_max,
+            .lod_max_clamp = std.math.floatMax(f32),
             .compare = c.WGPUCompareFunction_Undefined,
-            .border_color = c.WGPUSamplerBorderColor._TransparentBlack,
+            .border_color = c.WGPUSamplerBorderColor_TransparentBlack,
         });
 
         ////////////////////////////////////////////////////////////////////////////
@@ -147,9 +151,9 @@ pub const Backend = struct {
 
                 .multisampled = false,
                 .filtering = false,
-                .view_dimension = c.WGPUTextureViewDimension._D2,
+                .view_dimension = c.WGPUTextureViewDimension_D2,
                 .texture_component_type = c.WGPUTextureComponentType_Float,
-                .storage_texture_format = c.WGPUTextureFormat._Rgba8Unorm,
+                .storage_texture_format = c.WGPUTextureFormat_Rgba8Unorm,
 
                 .count = undefined,
                 .has_dynamic_offset = undefined,
@@ -184,25 +188,25 @@ pub const Backend = struct {
         // Vertex buffers (new!)
         const vertex_buffer_attributes = [_]c.WGPUVertexAttributeDescriptor{
             .{
-                .offset = @byteOffsetOf(c.ImDrawVert, "pos"),
-                .format = c.WGPUVertexFormat._Float2,
+                .offset = @offsetOf(c.ImDrawVert, "pos"),
+                .format = c.WGPUVertexFormat_Float2,
                 .shader_location = 0,
             },
             .{
-                .offset = @byteOffsetOf(c.ImDrawVert, "uv"),
-                .format = c.WGPUVertexFormat._Float2,
+                .offset = @offsetOf(c.ImDrawVert, "uv"),
+                .format = c.WGPUVertexFormat_Float2,
                 .shader_location = 1,
             },
             .{
-                .offset = @byteOffsetOf(c.ImDrawVert, "col"),
-                .format = c.WGPUVertexFormat._Uchar4Norm,
+                .offset = @offsetOf(c.ImDrawVert, "col"),
+                .format = c.WGPUVertexFormat_Uchar4Norm,
                 .shader_location = 2,
             },
         };
         const vertex_buffer_layout_entries = [_]c.WGPUVertexBufferDescriptor{
             .{
                 .stride = @sizeOf(c.ImDrawVert),
-                .step_mode = c.WGPUInputStepMode._Vertex,
+                .step_mode = c.WGPUInputStepMode_Vertex,
                 .attributes = &vertex_buffer_attributes,
                 .attributes_length = vertex_buffer_attributes.len,
             },
@@ -233,26 +237,26 @@ pub const Backend = struct {
                     .entry_point = "main",
                 },
                 .rasterization_state = &(c.WGPURasterizationStateDescriptor){
-                    .front_face = c.WGPUFrontFace._Ccw,
-                    .cull_mode = c.WGPUCullMode._None,
+                    .front_face = c.WGPUFrontFace_Ccw,
+                    .cull_mode = c.WGPUCullMode_None,
                     .depth_bias = 0,
                     .depth_bias_slope_scale = 0.0,
                     .depth_bias_clamp = 0.0,
-                    .polygon_mode = c.WGPUPolygonMode._Fill,
+                    .polygon_mode = c.WGPUPolygonMode_Fill,
                     .clamp_depth = false,
                 },
-                .primitive_topology = c.WGPUPrimitiveTopology._TriangleList,
+                .primitive_topology = c.WGPUPrimitiveTopology_TriangleList,
                 .color_states = &(c.WGPUColorStateDescriptor){
-                    .format = c.WGPUTextureFormat._Bgra8Unorm,
+                    .format = c.WGPUTextureFormat_Bgra8Unorm,
                     .alpha_blend = (c.WGPUBlendDescriptor){
-                        .src_factor = c.WGPUBlendFactor._SrcAlpha,
-                        .dst_factor = c.WGPUBlendFactor._OneMinusSrcAlpha,
-                        .operation = c.WGPUBlendOperation._Add,
+                        .src_factor = c.WGPUBlendFactor_SrcAlpha,
+                        .dst_factor = c.WGPUBlendFactor_OneMinusSrcAlpha,
+                        .operation = c.WGPUBlendOperation_Add,
                     },
                     .color_blend = (c.WGPUBlendDescriptor){
-                        .src_factor = c.WGPUBlendFactor._SrcAlpha,
-                        .dst_factor = c.WGPUBlendFactor._OneMinusSrcAlpha,
-                        .operation = c.WGPUBlendOperation._Add,
+                        .src_factor = c.WGPUBlendFactor_SrcAlpha,
+                        .dst_factor = c.WGPUBlendFactor_OneMinusSrcAlpha,
+                        .operation = c.WGPUBlendOperation_Add,
                     },
                     .write_mask = c.WGPUColorWrite_ALL,
                 },
@@ -355,14 +359,14 @@ pub const Backend = struct {
         // We need a non-const pointer here, so duplicate the data (which may
         // be embedded in the executable if this is a release image, so it
         // must be const).
-        var font_config = c.ImFontConfig_ImFontConfig();
+        const font_config = c.ImFontConfig_ImFontConfig();
         defer c.ImFontConfig_destroy(font_config);
         font_config.*.FontDataOwnedByAtlas = false;
         _ = c.ImFontAtlas_AddFontFromMemoryTTF(
             io.*.Fonts,
-            @ptrCast(*c_void, self.font_ttf.ptr),
-            @intCast(c_int, self.font_ttf.len),
-            @intToFloat(f32, FONT_SIZE) * pixel_density,
+            @as(*anyopaque, @ptrCast(self.font_ttf.ptr)),
+            @as(c_int, @intCast(self.font_ttf.len)),
+            @as(f32, @floatFromInt(FONT_SIZE)) * pixel_density,
             font_config,
             null,
         );
@@ -387,8 +391,8 @@ pub const Backend = struct {
                 },
                 .mip_level_count = 1,
                 .sample_count = 1,
-                .dimension = c.WGPUTextureDimension._D2,
-                .format = c.WGPUTextureFormat._Rgba8Unorm,
+                .dimension = c.WGPUTextureDimension_D2,
+                .format = c.WGPUTextureFormat_Rgba8Unorm,
 
                 .usage = (c.WGPUTextureUsage_COPY_DST |
                     c.WGPUTextureUsage_SAMPLED),
@@ -399,9 +403,9 @@ pub const Backend = struct {
             self.font_tex,
             &(c.WGPUTextureViewDescriptor){
                 .label = "font font view",
-                .dimension = c.WGPUTextureViewDimension._D2,
-                .format = c.WGPUTextureFormat._Rgba8Unorm,
-                .aspect = c.WGPUTextureAspect._All,
+                .dimension = c.WGPUTextureViewDimension_D2,
+                .format = c.WGPUTextureFormat_Rgba8Unorm,
+                .aspect = c.WGPUTextureAspect_All,
                 .base_mip_level = 0,
                 .level_count = 1,
                 .base_array_layer = 0,
@@ -420,7 +424,7 @@ pub const Backend = struct {
                 .mip_level = 0,
                 .origin = (c.WGPUOrigin3d){ .x = 0, .y = 0, .z = 0 },
             },
-            @ptrCast([*]const u8, font.pixels),
+            @as([*]const u8, @ptrCast(font.pixels)),
             font.width * font.height * font.bytes_per_pixel,
             &(c.WGPUTextureDataLayout){
                 .offset = 0,
@@ -429,7 +433,7 @@ pub const Backend = struct {
             },
             &font_tex_size,
         );
-        io.*.Fonts.*.TexID = @intToPtr(*c_void, self.font_tex_view);
+        io.*.Fonts.*.TexID = @as(*anyopaque, @ptrFromInt(self.font_tex_view));
     }
 
     pub fn deinit(self: *Self) void {
@@ -508,7 +512,7 @@ pub const Backend = struct {
             self.queue,
             self.uniform_buf,
             0,
-            @ptrCast([*c]const u8, &ortho_projection),
+            @as([*c]const u8, @ptrCast(&ortho_projection)),
             @sizeOf(@TypeOf(ortho_projection)),
         );
         return;
@@ -532,8 +536,8 @@ pub const Backend = struct {
                 .attachment = next_texture,
                 .resolve_target = 0,
                 .channel = (c.WGPUPassChannel_Color){
-                    .load_op = c.WGPULoadOp._Load,
-                    .store_op = c.WGPUStoreOp._Store,
+                    .load_op = c.WGPULoadOp_Load,
+                    .store_op = c.WGPUStoreOp_Store,
                     .clear_value = (c.WGPUColor){
                         .r = 0.0,
                         .g = 0.0,
@@ -552,8 +556,8 @@ pub const Backend = struct {
         var n: usize = 0;
         while (n < draw_data.*.CmdListsCount) : (n += 1) {
             const cmd_list = draw_data.*.CmdLists[n];
-            sum_vtx_buf_size += @intCast(usize, cmd_list.*.VtxBuffer.Size) * @sizeOf(c.ImDrawVert);
-            sum_idx_buf_size += @intCast(usize, cmd_list.*.IdxBuffer.Size) * @sizeOf(c.ImDrawIdx);
+            sum_vtx_buf_size += @as(usize, @intCast(cmd_list.*.VtxBuffer.Size)) * @sizeOf(c.ImDrawVert);
+            sum_idx_buf_size += @as(usize, @intCast(cmd_list.*.IdxBuffer.Size)) * @sizeOf(c.ImDrawIdx);
         }
         self.ensure_buf_size(sum_vtx_buf_size, sum_idx_buf_size);
 
@@ -568,20 +572,20 @@ pub const Backend = struct {
 
             // Copy this command list data into the buffers, then accumulate
             // offset after the draw loop
-            const vtx_buf_size = @intCast(usize, cmd_list.*.VtxBuffer.Size) * @sizeOf(c.ImDrawVert);
-            const idx_buf_size = @intCast(usize, cmd_list.*.IdxBuffer.Size) * @sizeOf(c.ImDrawIdx);
+            const vtx_buf_size = @as(usize, @intCast(cmd_list.*.VtxBuffer.Size)) * @sizeOf(c.ImDrawVert);
+            const idx_buf_size = @as(usize, @intCast(cmd_list.*.IdxBuffer.Size)) * @sizeOf(c.ImDrawIdx);
             c.wgpu_queue_write_buffer(
                 self.queue,
                 self.vertex_buf,
                 vtx_buf_offset,
-                @ptrCast([*c]const u8, cmd_list.*.VtxBuffer.Data),
+                @as([*c]const u8, @ptrCast(cmd_list.*.VtxBuffer.Data)),
                 vtx_buf_size,
             );
             c.wgpu_queue_write_buffer(
                 self.queue,
                 self.index_buf,
                 idx_buf_offset,
-                @ptrCast([*c]const u8, cmd_list.*.IdxBuffer.Data),
+                @as([*c]const u8, @ptrCast(cmd_list.*.IdxBuffer.Data)),
                 idx_buf_size,
             );
 
@@ -598,7 +602,7 @@ pub const Backend = struct {
                         .depth_stencil_attachment = null,
                     },
                 );
-                const bind_group = self.bind_group_for(@intCast(c.WGPUTextureViewId, @ptrToInt(pcmd.*.TextureId)));
+                const bind_group = self.bind_group_for(@as(c.WGPUTextureViewId, @intCast(@intFromPtr(pcmd.*.TextureId))));
                 defer c.wgpu_bind_group_destroy(bind_group);
 
                 c.wgpu_render_pass_set_pipeline(rpass, self.render_pipeline);
@@ -613,7 +617,7 @@ pub const Backend = struct {
                     rpass,
                     self.index_buf,
                     c.WGPUIndexFormat_Uint32,
-                    @intCast(u32, idx_buf_offset),
+                    @as(u32, @intCast(idx_buf_offset)),
                     idx_buf_size,
                 );
                 c.wgpu_render_pass_set_bind_group(rpass, 0, bind_group, null, 0);
@@ -624,10 +628,10 @@ pub const Backend = struct {
                 const clip_rect_w = (pcmd.*.ClipRect.w - clip_off.y) * clip_scale.y;
                 c.wgpu_render_pass_set_scissor_rect(
                     rpass,
-                    @floatToInt(u32, clip_rect_x),
-                    @floatToInt(u32, clip_rect_y),
-                    @floatToInt(u32, clip_rect_z - clip_rect_x),
-                    @floatToInt(u32, clip_rect_w - clip_rect_y),
+                    @as(u32, @intFromFloat(clip_rect_x)),
+                    @as(u32, @intFromFloat(clip_rect_y)),
+                    @as(u32, @intFromFloat(clip_rect_z - clip_rect_x)),
+                    @as(u32, @intFromFloat(clip_rect_w - clip_rect_y)),
                 );
 
                 c.wgpu_render_pass_draw_indexed(rpass, pcmd.*.ElemCount, 1, pcmd.*.IdxOffset, 0, 0);

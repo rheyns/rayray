@@ -1,8 +1,8 @@
 const std = @import("std");
-const c = @import("c.zig");
+const c = @import("c");
 
 pub fn save_png(
-    alloc: *std.mem.Allocator,
+    alloc: std.mem.Allocator,
     data: [*]const f32,
     samples: f32,
     width: usize,
@@ -19,10 +19,10 @@ pub fn save_png(
     const info_ptr = c.png_create_info_struct(png_ptr) orelse
         std.debug.panic("Could not create info ptr\n", .{});
 
-    c.png_init_io(png_ptr, @ptrCast(c.png_FILE_p, @alignCast(8, fp)));
+    c.png_init_io(png_ptr, @as(c.png_FILE_p, @ptrCast(@alignCast(fp))));
 
     // Write header (8 bit colour depth)
-    c.png_set_IHDR(png_ptr, info_ptr, @intCast(c_uint, width), @intCast(c_uint, height), 8, c.PNG_COLOR_TYPE_RGB, c.PNG_INTERLACE_NONE, c.PNG_COMPRESSION_TYPE_BASE, c.PNG_FILTER_TYPE_BASE);
+    c.png_set_IHDR(png_ptr, info_ptr, @as(c_uint, @intCast(width)), @as(c_uint, @intCast(height)), 8, c.PNG_COLOR_TYPE_RGB, c.PNG_INTERLACE_NONE, c.PNG_COMPRESSION_TYPE_BASE, c.PNG_FILTER_TYPE_BASE);
 
     c.png_write_info(png_ptr, info_ptr);
 
@@ -34,9 +34,9 @@ pub fn save_png(
         var x: usize = 0;
         const d = (height - y - 1) * width * 4;
         while (x < width) : (x += 1) {
-            row[x * 3 + 0] = @floatToInt(u8, std.math.sqrt(std.math.clamp(data[d + x * 4 + 0] / samples, 0, 1)) * 255);
-            row[x * 3 + 1] = @floatToInt(u8, std.math.sqrt(std.math.clamp(data[d + x * 4 + 1] / samples, 0, 1)) * 255);
-            row[x * 3 + 2] = @floatToInt(u8, std.math.sqrt(std.math.clamp(data[d + x * 4 + 2] / samples, 0, 1)) * 255);
+            row[x * 3 + 0] = @as(u8, @intFromFloat(std.math.sqrt(std.math.clamp(data[d + x * 4 + 0] / samples, 0, 1)) * 255));
+            row[x * 3 + 1] = @as(u8, @intFromFloat(std.math.sqrt(std.math.clamp(data[d + x * 4 + 1] / samples, 0, 1)) * 255));
+            row[x * 3 + 2] = @as(u8, @intFromFloat(std.math.sqrt(std.math.clamp(data[d + x * 4 + 2] / samples, 0, 1)) * 255));
         }
         c.png_write_row(png_ptr, row.ptr);
     }

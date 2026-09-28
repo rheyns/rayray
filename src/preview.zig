@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const shaderc = @import("shaderc.zig");
 
 const Scene = @import("scene.zig").Scene;
@@ -12,7 +12,7 @@ const Scene = @import("scene.zig").Scene;
 pub const Preview = struct {
     const Self = @This();
 
-    alloc: *std.mem.Allocator,
+    alloc: std.mem.Allocator,
     initialized: bool = false,
 
     // GPU handles
@@ -32,7 +32,7 @@ pub const Preview = struct {
     compute_pipeline: c.WGPUComputePipelineId,
 
     pub fn init(
-        alloc: *std.mem.Allocator,
+        alloc: std.mem.Allocator,
         scene: Scene,
         device: c.WGPUDeviceId,
         uniform_buf: c.WGPUBufferId,
@@ -40,7 +40,7 @@ pub const Preview = struct {
         image_buf_size: u32,
     ) !Self {
         var arena = std.heap.ArenaAllocator.init(alloc);
-        const tmp_alloc: *std.mem.Allocator = &arena.allocator;
+        const tmp_alloc: std.mem.Allocator = arena.allocator();
         defer arena.deinit();
 
         // This is the only available queue right now
@@ -254,14 +254,14 @@ pub const Preview = struct {
             self.queue,
             self.scene_buf,
             0,
-            @ptrCast([*c]const u8, encoded.ptr),
+            @as([*c]const u8, @ptrCast(encoded.ptr)),
             encoded.len * @sizeOf(c.vec4),
         );
     }
 
     pub fn render(
         self: *Self,
-        first: bool,
+        _: bool,
         nt: u32,
         cmd_encoder: c.WGPUCommandEncoderId,
     ) !void {

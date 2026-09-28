@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const examples = @import("scene/examples.zig");
 
 const Debounce = @import("debounce.zig").Debounce;
@@ -13,7 +13,7 @@ const Gui = @import("gui.zig").Gui;
 pub const Window = struct {
     const Self = @This();
 
-    alloc: *std.mem.Allocator,
+    alloc: std.mem.Allocator,
 
     window: *c.GLFWwindow,
 
@@ -33,18 +33,18 @@ pub const Window = struct {
     show_gui_demo: bool,
     total_samples: ?u32,
 
-    pub fn init(alloc: *std.mem.Allocator, options_: Options, name: [*c]const u8) !*Self {
+    pub fn init(alloc: std.mem.Allocator, options_: Options, name: [*c]const u8) !*Self {
         // WGPU owns the Metal layer. An OpenGL context would also update the
         // Cocoa view during resize and overwrite the presented Metal content.
         c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
         const window = c.glfwCreateWindow(
-            @intCast(c_int, options_.width),
-            @intCast(c_int, options_.height),
+            @as(c_int, @intCast(options_.width)),
+            @as(c_int, @intCast(options_.height)),
             name,
             null,
             null,
         ) orelse {
-            var err_str: [*c]u8 = null;
+            var err_str: [*c]const u8 = null;
             const err = c.glfwGetError(&err_str);
             std.debug.panic("Failed to open window: {} ({s})", .{ err, err_str });
         };
@@ -53,8 +53,8 @@ pub const Window = struct {
         var height_: c_int = undefined;
         c.glfwGetFramebufferSize(window, &width_, &height_);
         var options = options_;
-        options.width = @intCast(u32, width_);
-        options.height = @intCast(u32, height_);
+        options.width = @as(u32, @intCast(width_));
+        options.height = @as(u32, @intCast(height_));
 
         // Extract the WGPU Surface from the platform-specific window
         const platform = builtin.os.tag;
@@ -67,7 +67,7 @@ pub const Window = struct {
             const darwin = @import("darwin.zig");
 
             const cocoa_window = darwin.glfwGetCocoaWindow(window);
-            const ns_window = @ptrCast(c.id, @alignCast(8, cocoa_window));
+            const ns_window = @as(c.id, @ptrCast(@alignCast(cocoa_window)));
 
             const cv = objc.call(ns_window, "contentView");
             _ = objc.call_(cv, "setWantsLayer:", true);
@@ -86,7 +86,7 @@ pub const Window = struct {
         // WGPU initial setup
         var adapter: c.WGPUAdapterId = 0;
         c.wgpu_request_adapter_async(&(c.WGPURequestAdapterOptions){
-            .power_preference = c.WGPUPowerPreference._HighPerformance,
+            .power_preference = c.WGPUPowerPreference_HighPerformance,
             .compatible_surface = surface,
         }, 2 | 4 | 8, adapter_cb, &adapter);
 
@@ -134,9 +134,10 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        c.glfwDestroyWindow(self.window);
+        self.debounce.deinit();
         self.renderer.deinit();
         self.gui.deinit();
+        c.glfwDestroyWindow(self.window);
         self.alloc.destroy(self);
     }
 
@@ -173,7 +174,7 @@ pub const Window = struct {
         var save_img = false;
         if (c.igBeginMainMenuBar()) {
             if (c.igBeginMenu("Scene", true)) {
-                var new_scene_fn: ?fn (alloc: *std.mem.Allocator) anyerror!Scene = null;
+                var new_scene_fn: ?*const fn (alloc: std.mem.Allocator) anyerror!Scene = null;
                 if (c.igMenuItemBool("Simple", "", false, true)) {
                     new_scene_fn = examples.new_simple_scene;
                 }
@@ -282,7 +283,8 @@ pub const Window = struct {
                 }
             }
 
-            if (self.focused) {
+            // A requested PNG render must keep progressing without window focus.
+            if (self.focused or self.total_samples != null) {
                 c.glfwPollEvents();
             } else {
                 c.glfwWaitEvents();
@@ -291,8 +293,8 @@ pub const Window = struct {
     }
 
     fn update_size(self: *Self, width_: c_int, height_: c_int) void {
-        const width = @intCast(u32, width_);
-        const height = @intCast(u32, height_);
+        const width = @as(u32, @intCast(width_));
+        const height = @as(u32, @intCast(height_));
         self.renderer.update_size(width, height);
         self.resize_swap_chain(width, height);
     }
@@ -303,10 +305,10 @@ pub const Window = struct {
             self.surface,
             &(c.WGPUSwapChainDescriptor){
                 .usage = c.WGPUTextureUsage_RENDER_ATTACHMENT,
-                .format = c.WGPUTextureFormat._Bgra8Unorm,
+                .format = c.WGPUTextureFormat_Bgra8Unorm,
                 .width = width,
                 .height = height,
-                .present_mode = c.WGPUPresentMode._Fifo,
+                .present_mode = c.WGPUPresentMode_Fifo,
             },
         );
     }
@@ -318,16 +320,16 @@ pub const Window = struct {
 
 export fn size_cb(w: ?*c.GLFWwindow, width: c_int, height: c_int) void {
     const ptr = c.glfwGetWindowUserPointer(w) orelse std.debug.panic("Missing user pointer", .{});
-    var r = @ptrCast(*Window, @alignCast(8, ptr));
+    var r = @as(*Window, @ptrCast(@alignCast(ptr)));
     r.update_size(width, height);
 }
 
 export fn focus_cb(w: ?*c.GLFWwindow, focused: c_int) void {
     const ptr = c.glfwGetWindowUserPointer(w) orelse std.debug.panic("Missing user pointer", .{});
-    var r = @ptrCast(*Window, @alignCast(8, ptr));
+    var r = @as(*Window, @ptrCast(@alignCast(ptr)));
     r.update_focus(focused == c.GLFW_TRUE);
 }
 
-export fn adapter_cb(received: c.WGPUAdapterId, data: ?*c_void) void {
-    @ptrCast(*c.WGPUAdapterId, @alignCast(8, data)).* = received;
+export fn adapter_cb(received: c.WGPUAdapterId, data: ?*anyopaque) void {
+    @as(*c.WGPUAdapterId, @ptrCast(@alignCast(data))).* = received;
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const shaderc = @import("shaderc.zig");
 
 const Viewport = @import("viewport.zig").Viewport;
@@ -19,21 +19,21 @@ pub const Blit = struct {
     render_pipeline: c.WGPURenderPipelineId,
 
     pub fn init(
-        alloc: *std.mem.Allocator,
+        alloc: std.mem.Allocator,
         device: c.WGPUDeviceId,
         uniform_buf: c.WGPUBufferId,
         image_buf: c.WGPUBufferId,
         image_buf_size: u32,
     ) !Blit {
         var arena = std.heap.ArenaAllocator.init(alloc);
-        const tmp_alloc: *std.mem.Allocator = &arena.allocator;
+        const tmp_alloc: std.mem.Allocator = arena.allocator();
         defer arena.deinit();
 
         ////////////////////////////////////////////////////////////////////////////
         // Build the shaders using shaderc
         const blit_vert_name = "shaders/blit.vert";
         const vert_spv = shaderc.build_shader_from_file(tmp_alloc, blit_vert_name) catch |err| {
-            std.debug.panic("Could not open file", .{});
+            std.debug.panic("Could not open file: {}", .{err});
         };
         const vert_shader = c.wgpu_device_create_shader_module(
             device,
@@ -48,7 +48,7 @@ pub const Blit = struct {
 
         const blit_frag_name = "shaders/blit.frag";
         const frag_spv = shaderc.build_shader_from_file(tmp_alloc, blit_frag_name) catch |err| {
-            std.debug.panic("Could not open file", .{});
+            std.debug.panic("Could not open file: {}", .{err});
         };
         const frag_shader = c.wgpu_device_create_shader_module(
             device,
@@ -131,26 +131,26 @@ pub const Blit = struct {
                     .entry_point = "main",
                 },
                 .rasterization_state = &(c.WGPURasterizationStateDescriptor){
-                    .front_face = c.WGPUFrontFace._Ccw,
-                    .cull_mode = c.WGPUCullMode._None,
+                    .front_face = c.WGPUFrontFace_Ccw,
+                    .cull_mode = c.WGPUCullMode_None,
                     .depth_bias = 0,
                     .depth_bias_slope_scale = 0.0,
                     .depth_bias_clamp = 0.0,
-                    .polygon_mode = c.WGPUPolygonMode._Fill,
+                    .polygon_mode = c.WGPUPolygonMode_Fill,
                     .clamp_depth = false,
                 },
-                .primitive_topology = c.WGPUPrimitiveTopology._TriangleList,
+                .primitive_topology = c.WGPUPrimitiveTopology_TriangleList,
                 .color_states = &(c.WGPUColorStateDescriptor){
-                    .format = c.WGPUTextureFormat._Bgra8Unorm,
+                    .format = c.WGPUTextureFormat_Bgra8Unorm,
                     .alpha_blend = (c.WGPUBlendDescriptor){
-                        .src_factor = c.WGPUBlendFactor._One,
-                        .dst_factor = c.WGPUBlendFactor._Zero,
-                        .operation = c.WGPUBlendOperation._Add,
+                        .src_factor = c.WGPUBlendFactor_One,
+                        .dst_factor = c.WGPUBlendFactor_Zero,
+                        .operation = c.WGPUBlendOperation_Add,
                     },
                     .color_blend = (c.WGPUBlendDescriptor){
-                        .src_factor = c.WGPUBlendFactor._One,
-                        .dst_factor = c.WGPUBlendFactor._Zero,
-                        .operation = c.WGPUBlendOperation._Add,
+                        .src_factor = c.WGPUBlendFactor_One,
+                        .dst_factor = c.WGPUBlendFactor_Zero,
+                        .operation = c.WGPUBlendOperation_Add,
                     },
                     .write_mask = c.WGPUColorWrite_ALL,
                 },
@@ -235,8 +235,8 @@ pub const Blit = struct {
                 .attachment = next_texture,
                 .resolve_target = 0,
                 .channel = (c.WGPUPassChannel_Color){
-                    .load_op = c.WGPULoadOp._Load,
-                    .store_op = c.WGPUStoreOp._Store,
+                    .load_op = c.WGPULoadOp_Load,
+                    .store_op = c.WGPUStoreOp_Store,
                     .clear_value = (c.WGPUColor){
                         .r = 0.0,
                         .g = 0.0,

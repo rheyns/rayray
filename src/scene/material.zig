@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("../c.zig");
+const c = @import("c");
 const gui = @import("../gui.zig");
 
 pub const Color = struct {
@@ -10,7 +10,7 @@ pub const Color = struct {
     g: f32,
     b: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(.{ .x = self.r, .y = self.g, .z = self.b, .w = 0 });
     }
 };
@@ -19,12 +19,12 @@ pub const Diffuse = struct {
     const Self = @This();
 
     color: Color,
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         return self.color.encode(buf);
     }
 
     fn draw_gui(self: *Self) bool {
-        return c.igColorEdit3("", @ptrCast([*c]f32, &self.color), 0);
+        return c.igColorEdit3("", @as([*c]f32, @ptrCast(&self.color)), 0);
     }
 };
 
@@ -36,7 +36,7 @@ pub const Light = struct {
     color: Color,
     intensity: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         return buf.append(.{
             .x = self.color.r * self.intensity,
             .y = self.color.g * self.intensity,
@@ -46,7 +46,7 @@ pub const Light = struct {
     }
 
     fn draw_gui(self: *Self) bool {
-        const a = c.igColorEdit3("", @ptrCast([*c]f32, &self.color), 0);
+        const a = c.igColorEdit3("", @as([*c]f32, @ptrCast(&self.color)), 0);
         c.igPushItemWidth(c.igGetWindowWidth() * 0.4);
         const b = c.igDragFloat("intensity", &self.intensity, 0.05, 1, 10, "%.2f", 0);
         c.igPopItemWidth();
@@ -59,7 +59,7 @@ pub const Metal = struct {
 
     color: Color,
     fuzz: f32,
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(.{
             .x = self.color.r,
             .y = self.color.g,
@@ -68,7 +68,7 @@ pub const Metal = struct {
         });
     }
     fn draw_gui(self: *Self) bool {
-        const a = c.igColorEdit3("", @ptrCast([*c]f32, &self.color), 0);
+        const a = c.igColorEdit3("", @as([*c]f32, @ptrCast(&self.color)), 0);
         c.igPushItemWidth(c.igGetWindowWidth() * 0.4);
         const b = c.igDragFloat("fuzz", &self.fuzz, 0.01, 0, 10, "%.2f", 0);
         c.igPopItemWidth();
@@ -81,7 +81,7 @@ pub const Glass = struct {
 
     eta: f32,
     slope: f32,
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(.{
             .x = self.eta,
             .y = self.slope,
@@ -107,7 +107,7 @@ pub const Laser = struct {
     intensity: f32,
     focus: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         return buf.append(.{
             .x = self.color.r * self.intensity,
             .y = self.color.g * self.intensity,
@@ -117,7 +117,7 @@ pub const Laser = struct {
     }
 
     fn draw_gui(self: *Self) bool {
-        const a = c.igColorEdit3("", @ptrCast([*c]f32, &self.color), 0);
+        const a = c.igColorEdit3("", @as([*c]f32, @ptrCast(&self.color)), 0);
         c.igPushItemWidth(c.igGetWindowWidth() * 0.4);
         const b = c.igDragFloat("intensity", &self.intensity, 0.05, 1, 500, "%.2f", 0);
         const f = c.igDragFloat("focus", &self.focus, 0.01, 0, 1, "%.2f", 0);
@@ -194,7 +194,7 @@ pub const Material = union(enum) {
         };
     }
 
-    pub fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    pub fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         // We don't encode the tag here, because we can put it into the Shape
         // header to save space.
         return switch (self) {
@@ -212,14 +212,14 @@ pub const Material = union(enum) {
             .Diffuse => |m| m.color,
             .Light => |m| m.color,
             .Metal => |m| m.color,
-            .Glass => |m| Color{ .r = 1, .g = 0.5, .b = 0.5 },
+            .Glass => Color{ .r = 1, .g = 0.5, .b = 0.5 },
             .Laser => |m| m.color,
-            .Metaflat => |m| Color{ .r = 1, .g = 0.5, .b = 0.5 },
+            .Metaflat => Color{ .r = 1, .g = 0.5, .b = 0.5 },
         };
     }
 
     pub fn draw_gui(self: *Self) bool {
-        comptime const widgets = @import("../gui/widgets.zig");
+        const widgets = @import("../gui/widgets.zig");
         var changed = false;
         if (widgets.draw_enum_combo(Self, self.*)) |e| {
             // Swap the material type if the combo box returns a new tag

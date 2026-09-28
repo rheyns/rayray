@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("../c.zig");
+const c = @import("c");
 const gui = @import("../gui.zig");
 const widgets = @import("../gui/widgets.zig");
 
@@ -41,14 +41,14 @@ pub const Shape = struct {
         };
     }
 
-    pub fn new_cylinder(pos: c.vec3, dir: c.vec3, r: f32) Self {
+    pub fn new_cylinder(pos: c.vec3, dir: c.vec3, r: f32, mat: u32) Self {
         return Self{
             .prim = Primitive.new_cylinder(pos, dir, r),
             .mat = mat,
         };
     }
 
-    pub fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    pub fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try self.prim.encode(buf);
     }
 
@@ -93,10 +93,10 @@ pub const Shape = struct {
                 },
             }
         }
-        var mat: c_int = @intCast(c_int, self.mat);
+        var mat: c_int = @as(c_int, @intCast(self.mat));
         c.igPushItemWidth(c.igGetWindowWidth() * 0.6);
-        if (c.igDragInt("mat", &mat, 0.1, 0, @intCast(c_int, num_materials - 1), "%i", 0)) {
-            self.mat = @intCast(u32, mat);
+        if (c.igDragInt("mat", &mat, 0.1, 0, @as(c_int, @intCast(num_materials - 1)), "%i", 0)) {
+            self.mat = @as(u32, @intCast(mat));
             changed = true;
         }
         changed = self.prim.draw_gui() or changed;

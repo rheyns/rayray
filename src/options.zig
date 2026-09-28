@@ -6,14 +6,10 @@ pub const Options = struct {
     height: u32,
     spectral: bool,
 
-    fn print_help() !void {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("rayray [-h] [-n total_samples]\n", .{});
+    fn print_help() void {
+        _ = @import("c").puts("rayray [-h] [-n total_samples] [-s]");
     }
-    pub fn parse_args(alloc: *std.mem.Allocator) !Options {
-        const args = try std.process.argsAlloc(alloc);
-        defer std.process.argsFree(alloc, args);
-
+    pub fn parse_args(args: []const [:0]const u8) !Options {
         var out = Options{
             .total_samples = null,
             .width = 600,
@@ -23,7 +19,7 @@ pub const Options = struct {
         var i: usize = 1;
         while (i < args.len) : (i += 1) {
             if (std.mem.eql(u8, args[i], "-h")) {
-                try print_help();
+                print_help();
                 std.process.exit(0);
             } else if (std.mem.eql(u8, args[i], "-n")) {
                 i += 1;
@@ -33,7 +29,7 @@ pub const Options = struct {
                 } else {
                     if (std.fmt.parseUnsigned(u32, args[i], 10)) |s| {
                         out.total_samples = s;
-                    } else |err| {
+                    } else |_| {
                         std.debug.print("Error: {s} is not an integer", .{args[i]});
                         std.process.exit(1);
                     }

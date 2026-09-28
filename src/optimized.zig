@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const shaderc = @import("shaderc.zig");
 
 // This struct runs a raytracing kernel which uses a compiled scene.
@@ -18,7 +18,7 @@ pub const Optimized = struct {
     initialized: bool = false,
 
     pub fn init(
-        alloc: *std.mem.Allocator,
+        _: std.mem.Allocator,
         comp_shader: c.WGPUShaderModuleId,
         device: c.WGPUDeviceId,
         uniform_buf: c.WGPUBufferId,
@@ -154,7 +154,7 @@ pub const Optimized = struct {
 
     pub fn render(
         self: *Self,
-        first: bool,
+        _: bool,
         nt: u32,
         cmd_encoder: c.WGPUCommandEncoderId,
     ) !void {

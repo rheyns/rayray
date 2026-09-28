@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const util = @import("util.zig");
 
 // TODO: calculate this whole error and function below at comptime
@@ -17,7 +17,7 @@ const CompilationError = error{
 
     UnknownError,
 };
-fn status_to_err(i: c_int) CompilationError {
+fn status_to_err(i: c.shaderc_compilation_status) CompilationError {
     switch (i) {
         c.shaderc_compilation_status_invalid_stage => return CompilationError.InvalidStage,
         c.shaderc_compilation_status_compilation_error => return CompilationError.CompilationError,
@@ -32,13 +32,13 @@ fn status_to_err(i: c_int) CompilationError {
 }
 
 export fn include_cb(
-    user_data: ?*c_void,
+    user_data: ?*anyopaque,
     requested_source: [*c]const u8,
-    include_type: c_int,
-    requesting_source: [*c]const u8,
-    include_depth: usize,
+    _: c_int,
+    _: [*c]const u8,
+    _: usize,
 ) *c.shaderc_include_result {
-    const alloc = @ptrCast(*std.mem.Allocator, @alignCast(8, user_data));
+    const alloc = @as(*std.mem.Allocator, @ptrCast(@alignCast(user_data))).*;
     var out = alloc.create(c.shaderc_include_result) catch |err| {
         std.debug.panic("Could not allocate shaderc_include_result: {}", .{err});
     };
@@ -50,8 +50,8 @@ export fn include_cb(
         .content_length = 0,
     };
 
-    const name = std.mem.spanZ(requested_source);
-    const file = std.fs.cwd().openFile(name, std.fs.File.OpenFlags{ .read = true }) catch |err| {
+    const name = std.mem.span(requested_source);
+    const buf = std.Io.Dir.cwd().readFileAlloc(@import("runtime.zig").io, name, alloc, .unlimited) catch |err| {
         const msg = std.fmt.allocPrint(alloc, "{}", .{err}) catch |err2| {
             std.debug.panic("Could not allocate error message: {}", .{err2});
         };
@@ -60,18 +60,6 @@ export fn include_cb(
 
         return out;
     };
-    defer file.close();
-
-    const size = file.getEndPos() catch |err| {
-        std.debug.panic("Could not get end position of file: {}", .{err});
-    };
-    const buf = alloc.alloc(u8, size) catch |err| {
-        std.debug.panic("Could not allocate space for data: {}", .{err});
-    };
-    _ = file.readAll(buf) catch |err| {
-        std.debug.panic("Could not read header: {}", .{err});
-    };
-
     out.source_name = requested_source;
     out.source_name_length = name.len;
     out.content = buf.ptr;
@@ -79,20 +67,20 @@ export fn include_cb(
     return out;
 }
 
-export fn include_release_cb(user_data: ?*c_void, include_result: ?*c.shaderc_include_result) void {
+export fn include_release_cb(_: ?*anyopaque, _: ?*c.shaderc_include_result) void {
     // We don't need to do anything here, because we're using an arena allocator
 }
 
-pub fn build_shader_from_file(alloc: *std.mem.Allocator, comptime name: []const u8) ![]u32 {
+pub fn build_shader_from_file(alloc: std.mem.Allocator, comptime name: []const u8) ![]u32 {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     const buf = try util.file_contents(&arena, name);
     return build_shader(alloc, name, buf);
 }
 
-pub fn build_shader(alloc: *std.mem.Allocator, name: []const u8, src: []const u8) ![]u32 {
+pub fn build_shader(alloc: std.mem.Allocator, name: []const u8, src: []const u8) ![]u32 {
     var arena = std.heap.ArenaAllocator.init(alloc);
-    var tmp_alloc: *std.mem.Allocator = &arena.allocator;
+    var tmp_alloc: std.mem.Allocator = arena.allocator();
     defer arena.deinit();
 
     const compiler = c.shaderc_compiler_initialize();
@@ -104,31 +92,31 @@ pub fn build_shader(alloc: *std.mem.Allocator, name: []const u8, src: []const u8
         options,
         include_cb,
         include_release_cb,
-        tmp_alloc,
+        &tmp_alloc,
     );
 
     const result = c.shaderc_compile_into_spv(
         compiler,
         src.ptr,
         src.len,
-        c.shaderc_shader_kind.shaderc_glsl_infer_from_source,
+        c.shaderc_glsl_infer_from_source,
         name.ptr,
         "main",
         options,
     );
     defer c.shaderc_result_release(result);
     const r = c.shaderc_result_get_compilation_status(result);
-    if (@enumToInt(r) != c.shaderc_compilation_status_success) {
+    if (r != c.shaderc_compilation_status_success) {
         const err = c.shaderc_result_get_error_message(result);
-        std.debug.warn("Shader error: {} {s}\n", .{ r, err });
-        return status_to_err(@enumToInt(r));
+        std.debug.print("Shader error: {} {s}\n", .{ r, err });
+        return status_to_err(r);
     }
 
     // Copy the result out of the shader
     const len = c.shaderc_result_get_length(result);
     std.debug.assert(len % 4 == 0);
     const out = alloc.alloc(u32, len / 4) catch unreachable;
-    @memcpy(@ptrCast([*]u8, out.ptr), c.shaderc_result_get_bytes(result), len);
+    @memcpy(std.mem.sliceAsBytes(out), c.shaderc_result_get_bytes(result)[0..len]);
 
     return out;
 }
@@ -152,7 +140,7 @@ pub const Result = union(enum) {
     Shader: Shader,
     Error: Error,
 
-    pub fn deinit(self: Result, alloc: *std.mem.Allocator) void {
+    pub fn deinit(self: Result, alloc: std.mem.Allocator) void {
         switch (self) {
             .Shader => |d| alloc.free(d.spirv),
             .Error => |e| {

@@ -31,8 +31,10 @@ A tiny GPU raytracer!
 
 ## Building on Apple Silicon
 
-This branch builds with the native ARM64 **Zig 0.8.0** release. Newer Zig
-releases have incompatible language and standard library changes.
+This branch targets **Zig 0.17.0-dev.2313+5b9147ed5** on native ARM64 macOS.
+There is no final 0.17.0 release yet; use this exact development build, also
+recorded in `.zigversion`. Older Zig releases cannot compile this branch.
+
 Install Homebrew dependencies and initialize the pinned ImGui submodules:
 
 ```sh
@@ -45,8 +47,10 @@ directory:
 
 ```sh
 mkdir -p .tools
-curl -fL https://ziglang.org/download/0.8.0/zig-macos-aarch64-0.8.0.tar.xz -o .tools/zig-0.8.0.tar.xz
-tar -xf .tools/zig-0.8.0.tar.xz -C .tools
+curl -fL 'https://ziglang.org/builds/zig-aarch64-macos-0.17.0-dev.2313+5b9147ed5.tar.xz' -o .tools/zig-0.17.0-dev.2313.tar.xz
+# Expected SHA-256: 9e2abc63ea4db5df046aa3088e1b660faca39c83da3bda544c734c65af5365c9
+shasum -a 256 .tools/zig-0.17.0-dev.2313.tar.xz
+tar -xf .tools/zig-0.17.0-dev.2313.tar.xz -C .tools
 ```
 
 With Rust/Cargo installed, build the pinned native WebGPU library once, then
@@ -54,11 +58,25 @@ build and run rayray from the project directory:
 
 ```sh
 make -C vendor wgpu
-.tools/zig-macos-aarch64-0.8.0/zig build
+.tools/zig-aarch64-macos-0.17.0-dev.2313+5b9147ed5/zig build
 ./zig-out/bin/rayray
 # Render the default Cornell Box to out.png and exit:
 ./zig-out/bin/rayray -n 1024
 ```
+
+For an optimized build with safety checks, add `-Doptimize=safe`. The default
+is `debug`; `fast` and `small` are also available. `zig build run -- -n 1024`
+builds and runs with arguments when the pinned compiler is on your `PATH`.
+Run from the project directory so runtime shader includes can be found.
+Use `./zig-out/bin/rayray -s` for spectral rendering, then select **Scene → Prism**
+to see dispersion. **Edit → Show editor** opens the camera, shape, and material
+controls. A render requested with `-n` continues even when the window loses focus.
+
+C bindings are generated with `translate-c`. The build corrects the pinned
+cimgui header's index typedef to match the renderer's 32-bit index buffers,
+without modifying the submodule. The scalar ImGui bridge and Metal resize fix
+are retained. Worker threads are joined before shutdown, and the ImGui allocator
+keeps a stable context for its callbacks.
 
 The build uses Homebrew at `/opt/homebrew` (or `HOMEBREW_PREFIX` when set).
 Keep `vendor/wgpu/libwgpu_native.dylib` alongside the project: the executable
@@ -72,7 +90,7 @@ To check the resize path, launch the interactive app, resize it wider, then
 taller, and restore its original size. The scene and GUI should stay visible,
 with sampling restarting at each new size.
 
-## Project status
+## Upstream project status
 ![Project unsupported](https://img.shields.io/badge/project-unsupported-red.svg)
 
 This is a personal / toy project,

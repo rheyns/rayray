@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const vec3 = @import("scene/vec3.zig");
 
 const Shape = @import("scene/shape.zig").Shape;
@@ -9,17 +9,17 @@ const Material = @import("scene/material.zig").Material;
 pub const Scene = struct {
     const Self = @This();
 
-    alloc: *std.mem.Allocator,
-    shapes: std.ArrayList(Shape),
-    materials: std.ArrayList(Material),
+    alloc: std.mem.Allocator,
+    shapes: std.array_list.Managed(Shape),
+    materials: std.array_list.Managed(Material),
     camera: c.rayCamera,
 
-    pub fn new(alloc: *std.mem.Allocator) Self {
+    pub fn new(alloc: std.mem.Allocator) Self {
         return Scene{
             .alloc = alloc,
 
-            .shapes = std.ArrayList(Shape).init(alloc),
-            .materials = std.ArrayList(Material).init(alloc),
+            .shapes = std.array_list.Managed(Shape).init(alloc),
+            .materials = std.array_list.Managed(Material).init(alloc),
             .camera = default_camera(),
         };
     }
@@ -112,14 +112,14 @@ pub const Scene = struct {
     }
 
     pub fn clone(self: *const Self) !Self {
-        var shapes = try std.ArrayList(Shape).initCapacity(
+        var shapes = try std.array_list.Managed(Shape).initCapacity(
             self.alloc,
             self.shapes.items.len,
         );
         for (self.shapes.items) |s| {
             try shapes.append(s);
         }
-        var materials = try std.ArrayList(Material).initCapacity(
+        var materials = try std.array_list.Managed(Material).initCapacity(
             self.alloc,
             self.materials.items.len,
         );
@@ -148,7 +148,7 @@ pub const Scene = struct {
 
     pub fn new_material(self: *Self, m: Material) !u32 {
         try self.materials.append(m);
-        return @intCast(u32, self.materials.items.len - 1);
+        return @as(u32, @intCast(self.materials.items.len - 1));
     }
 
     pub fn deinit(self: *Self) void {
@@ -180,23 +180,23 @@ pub const Scene = struct {
         // material, but we had a spare slot in the vec4, so this saves memory)
 
         // Store the list length as the first element
-        var stack = std.ArrayList(c.vec4).init(self.alloc);
+        var stack = std.array_list.Managed(c.vec4).init(self.alloc);
         defer stack.deinit();
         try stack.append(.{
-            .x = @bitCast(f32, @intCast(u32, self.shapes.items.len)),
+            .x = @as(f32, @bitCast(@as(u32, @intCast(self.shapes.items.len)))),
             .y = 0,
             .z = 0,
             .w = 0,
         });
 
-        var heap = std.ArrayList(c.vec4).init(self.alloc);
+        var heap = std.array_list.Managed(c.vec4).init(self.alloc);
         defer heap.deinit();
 
         // Materials all live on the heap, with tags stored in the shapes
-        var mat_indexes = std.ArrayList(u32).init(self.alloc);
+        var mat_indexes = std.array_list.Managed(u32).init(self.alloc);
         defer mat_indexes.deinit();
         for (self.materials.items) |m| {
-            try mat_indexes.append(@intCast(u32, offset + heap.items.len));
+            try mat_indexes.append(@as(u32, @intCast(offset + heap.items.len)));
             try m.encode(&heap);
         }
 
@@ -205,10 +205,10 @@ pub const Scene = struct {
             // Encode the shape's primary key
             const m = self.materials.items[s.mat];
             try stack.append(.{
-                .x = @bitCast(f32, s.prim.tag()), // kind
-                .y = @bitCast(f32, @intCast(u32, offset + heap.items.len)), // data offset
-                .z = @bitCast(f32, mat_indexes.items[s.mat]), // mat index
-                .w = @bitCast(f32, m.tag()), // mat tag
+                .x = @as(f32, @bitCast(s.prim.tag())), // kind
+                .y = @as(f32, @bitCast(@as(u32, @intCast(offset + heap.items.len)))), // data offset
+                .z = @as(f32, @bitCast(mat_indexes.items[s.mat])), // mat index
+                .w = @as(f32, @bitCast(m.tag())), // mat tag
             });
             // Encode any data that the shape needs
             try s.encode(&heap);
@@ -249,7 +249,7 @@ pub const Scene = struct {
         const num_mats = self.materials.items.len;
         const width = c.igGetWindowWidth();
         while (i < self.shapes.items.len) : (i += 1) {
-            c.igPushIDPtr(@ptrCast(*c_void, &self.shapes.items[i]));
+            c.igPushIDPtr(@as(*anyopaque, @ptrCast(&self.shapes.items[i])));
             c.igText("Shape %i:", i);
             c.igIndent(c.igGetTreeNodeToLabelSpacing());
             changed = (try self.shapes.items[i].draw_gui(num_mats)) or changed;
@@ -280,7 +280,7 @@ pub const Scene = struct {
         var i: usize = 0;
         const width = c.igGetWindowWidth();
         while (i < self.materials.items.len) : (i += 1) {
-            c.igPushIDPtr(@ptrCast(*c_void, &self.materials.items[i]));
+            c.igPushIDPtr(@as(*anyopaque, @ptrCast(&self.materials.items[i])));
             c.igText("Material %i:", i);
             c.igIndent(c.igGetTreeNodeToLabelSpacing());
             changed = (self.materials.items[i].draw_gui()) or changed;
@@ -311,7 +311,7 @@ pub const Scene = struct {
 
     pub fn trace_glsl(self: *const Self) ![]const u8 {
         var arena = std.heap.ArenaAllocator.init(self.alloc);
-        const tmp_alloc: *std.mem.Allocator = &arena.allocator;
+        const tmp_alloc: std.mem.Allocator = arena.allocator();
         defer arena.deinit();
 
         var out = try std.fmt.allocPrint(tmp_alloc,
@@ -327,7 +327,7 @@ pub const Scene = struct {
         , .{});
         var i: usize = 1;
         for (self.shapes.items) |shape| {
-            const dist = switch (shape.prim) {
+            const dist = try switch (shape.prim) {
                 .Sphere => |s| std.fmt.allocPrint(
                     tmp_alloc,
                     "hit_sphere(pos, dir, vec3({}, {}, {}), {})",
@@ -414,7 +414,7 @@ pub const Scene = struct {
         , .{out});
 
         var mat_count: [c.LAST_MAT]usize = undefined;
-        std.mem.set(usize, mat_count[0..], 1);
+        @memset(mat_count[0..], 1);
 
         var mat_index = try tmp_alloc.alloc(usize, self.materials.items.len);
         i = 0;
@@ -430,7 +430,7 @@ pub const Scene = struct {
         // We dispatch first on shape tag (SPHERE / PLANE / etc), then on
         // sub-index (0-n_shape for each shape type)
         var shape_count: [c.LAST_SHAPE]usize = undefined;
-        std.mem.set(usize, shape_count[0..], 1);
+        @memset(shape_count[0..], 1);
 
         for (self.shapes.items) |shape| {
             const shape_tag: u32 = shape.prim.tag();

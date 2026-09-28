@@ -6,7 +6,7 @@ const Scene = @import("../scene.zig").Scene;
 const Shape = @import("shape.zig").Shape;
 const Material = @import("material.zig").Material;
 
-pub fn new_light_scene(alloc: *std.mem.Allocator) !Scene {
+pub fn new_light_scene(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     const light = try scene.new_material(Material.new_light(1, 1, 1, 1));
     try scene.shapes.append(Shape.new_sphere(
@@ -17,7 +17,7 @@ pub fn new_light_scene(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_orb_scene(alloc: *std.mem.Allocator) !Scene {
+pub fn new_orb_scene(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     scene.camera.pos.y = 1;
     scene.camera.pos.z = 2;
@@ -45,14 +45,14 @@ pub fn new_orb_scene(alloc: *std.mem.Allocator) !Scene {
 
     // Initialize the RNG
     var buf: [8]u8 = undefined;
-    try std.os.getrandom(buf[0..]);
-    const seed = std.mem.readIntLittle(u64, buf[0..8]);
+    std.Io.random(@import("../runtime.zig").io, buf[0..]);
+    const seed = std.mem.readInt(u64, buf[0..8], .little);
 
-    var r = std.rand.DefaultPrng.init(seed);
+    var r = std.Random.DefaultPrng.init(seed);
 
     const NUM: i32 = 4;
     const SCALE: f32 = 0.75;
-    const SIZE: f32 = SCALE / @intToFloat(f32, NUM);
+    const SIZE: f32 = SCALE / @as(f32, @floatFromInt(NUM));
     var x: i32 = -NUM;
 
     try scene.shapes.append(Shape.new_sphere(
@@ -78,15 +78,15 @@ pub fn new_orb_scene(alloc: *std.mem.Allocator) !Scene {
     while (x <= NUM) : (x += 1) {
         var z: i32 = -NUM;
         while (z <= NUM) : (z += 1) {
-            const h = if (std.math.absCast(x) == NUM and std.math.absCast(z) == NUM)
+            const h = if (@abs(x) == NUM and @abs(z) == NUM)
                 0.1
             else
-                r.random.float(f32) * 0.1;
+                r.random().float(f32) * 0.1;
             try scene.add_cube(
                 .{
-                    .x = @intToFloat(f32, x) * SIZE,
+                    .x = @as(f32, @floatFromInt(x)) * SIZE,
                     .y = h,
-                    .z = @intToFloat(f32, z) * SIZE,
+                    .z = @as(f32, @floatFromInt(z)) * SIZE,
                 },
                 .{ .x = 1, .y = 0, .z = 0 }, // dx
                 .{ .x = 0, .y = 1, .z = 0 }, // dy
@@ -98,7 +98,7 @@ pub fn new_orb_scene(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_simple_scene(alloc: *std.mem.Allocator) !Scene {
+pub fn new_simple_scene(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     const white = try scene.new_material(Material.new_diffuse(1, 1, 1));
     const red = try scene.new_material(Material.new_diffuse(1, 0.2, 0.2));
@@ -123,7 +123,7 @@ pub fn new_simple_scene(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_white_box(alloc: *std.mem.Allocator) !Scene {
+pub fn new_white_box(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     const white = try scene.new_material(Material.new_diffuse(1, 1, 1));
     const light = try scene.new_material(Material.new_light(1, 1, 1, 7));
@@ -175,7 +175,7 @@ pub fn new_white_box(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_hex_box(alloc: *std.mem.Allocator) !Scene {
+pub fn new_hex_box(alloc: std.mem.Allocator) !Scene {
     var scene = try new_white_box(alloc);
     scene.camera.defocus = 0;
     scene.camera.scale = 0.4;
@@ -188,12 +188,11 @@ pub fn new_hex_box(alloc: *std.mem.Allocator) !Scene {
     const metal = try scene.new_material(Material.new_metal(1, 0.86, 0.45, 0.2));
     const NUM: i32 = 4;
     const SCALE: f32 = 0.5;
-    const SIZE: f32 = SCALE / @intToFloat(f32, NUM);
+    const SIZE: f32 = SCALE / @as(f32, @floatFromInt(NUM));
     var x = -NUM;
     while (x <= NUM) : (x += 1) {
         var z: i32 = -NUM;
         while (z <= NUM) : (z += 1) {
-            const dy = std.math.sin(@intToFloat(f32, x) / @intToFloat(f32, NUM) * std.math.pi);
             var dx: f32 = 0;
             if (@rem(z, 2) == 0) {
                 dx = SIZE / 2;
@@ -203,9 +202,9 @@ pub fn new_hex_box(alloc: *std.mem.Allocator) !Scene {
             }
             try scene.shapes.append(Shape.new_sphere(
                 .{
-                    .x = @intToFloat(f32, x) * SIZE + dx,
+                    .x = @as(f32, @floatFromInt(x)) * SIZE + dx,
                     .y = -1 + SCALE / 20,
-                    .z = @intToFloat(f32, z) * SIZE * 0.866,
+                    .z = @as(f32, @floatFromInt(z)) * SIZE * 0.866,
                 },
                 SCALE / 20,
                 metal,
@@ -215,7 +214,7 @@ pub fn new_hex_box(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_cornell_box(alloc: *std.mem.Allocator) !Scene {
+pub fn new_cornell_box(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     scene.camera.defocus = 0;
     const white = try scene.new_material(Material.new_diffuse(1, 1, 1));
@@ -281,7 +280,7 @@ pub fn new_cornell_box(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_cornell_balls(alloc: *std.mem.Allocator) !Scene {
+pub fn new_cornell_balls(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     const white = try scene.new_material(Material.new_diffuse(1, 1, 1));
     const red = try scene.new_material(Material.new_diffuse(1, 0.1, 0.1));
@@ -355,7 +354,7 @@ pub fn new_cornell_balls(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_cornell_aberration(alloc: *std.mem.Allocator) !Scene {
+pub fn new_cornell_aberration(alloc: std.mem.Allocator) !Scene {
     var scene = try new_cornell_balls(alloc);
     scene.camera.pos = .{ .x = 0, .y = -0.6, .z = 1 };
     scene.camera.target = .{ .x = 0, .y = -0.6, .z = 0 };
@@ -364,13 +363,13 @@ pub fn new_cornell_aberration(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_rtiow(alloc: *std.mem.Allocator) !Scene {
+pub fn new_rtiow(alloc: std.mem.Allocator) !Scene {
     // Initialize the RNG
     var buf: [8]u8 = undefined;
-    try std.os.getrandom(buf[0..]);
-    const seed = std.mem.readIntLittle(u64, buf[0..8]);
+    std.Io.random(@import("../runtime.zig").io, buf[0..]);
+    const seed = std.mem.readInt(u64, buf[0..8], .little);
 
-    var r = std.rand.DefaultPrng.init(seed);
+    var r = std.Random.DefaultPrng.init(seed);
 
     var scene = Scene.new(alloc);
     scene.camera = .{
@@ -397,9 +396,9 @@ pub fn new_rtiow(alloc: *std.mem.Allocator) !Scene {
     while (a < 11) : (a += 1) {
         var b: i32 = -11;
         while (b < 11) : (b += 1) {
-            const x = @intToFloat(f32, a) + 0.7 * r.random.float(f32);
+            const x = @as(f32, @floatFromInt(a)) + 0.7 * r.random().float(f32);
             const y: f32 = 0.18;
-            const z = @intToFloat(f32, b) + 0.7 * r.random.float(f32);
+            const z = @as(f32, @floatFromInt(b)) + 0.7 * r.random().float(f32);
 
             const da = std.math.sqrt(std.math.pow(f32, x - 4, 2) +
                 std.math.pow(f32, z, 2));
@@ -409,20 +408,20 @@ pub fn new_rtiow(alloc: *std.mem.Allocator) !Scene {
                 std.math.pow(f32, z, 2));
 
             if (da > 1.1 and db > 1.1 and dc > 1.1) {
-                const choose_mat = r.random.float(f32);
+                const choose_mat = r.random().float(f32);
                 var mat: u32 = undefined;
                 if (choose_mat < 0.8) {
-                    const red = r.random.float(f32);
-                    const green = r.random.float(f32);
-                    const blue = r.random.float(f32);
+                    const red = r.random().float(f32);
+                    const green = r.random().float(f32);
+                    const blue = r.random().float(f32);
                     mat = try scene.new_material(
                         Material.new_diffuse(red, green, blue),
                     );
                 } else if (choose_mat < 0.95) {
-                    const red = r.random.float(f32) / 2 + 1;
-                    const green = r.random.float(f32) / 2 + 1;
-                    const blue = r.random.float(f32) / 2 + 1;
-                    const fuzz = r.random.float(f32) / 2;
+                    const red = r.random().float(f32) / 2 + 1;
+                    const green = r.random().float(f32) / 2 + 1;
+                    const blue = r.random().float(f32) / 2 + 1;
+                    const fuzz = r.random().float(f32) / 2;
                     mat = try scene.new_material(
                         Material.new_metal(red, green, blue, fuzz),
                     );
@@ -464,7 +463,7 @@ pub fn new_rtiow(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_horizon(alloc: *std.mem.Allocator) !Scene {
+pub fn new_horizon(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     const blue = try scene.new_material(Material.new_diffuse(0.5, 0.5, 1));
     const red = try scene.new_material(Material.new_diffuse(1, 0.5, 0.5));
@@ -519,7 +518,7 @@ pub fn new_horizon(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_prism(alloc: *std.mem.Allocator) !Scene {
+pub fn new_prism(alloc: std.mem.Allocator) !Scene {
     var scene = Scene.new(alloc);
     scene.camera.perspective = 0;
     scene.camera.defocus = 0;
@@ -581,7 +580,7 @@ pub fn new_prism(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_caffeine(alloc: *std.mem.Allocator) !Scene {
+pub fn new_caffeine(alloc: std.mem.Allocator) !Scene {
     var scene = try @import("mol.zig").from_mol_file(alloc, "data/caffeine.mol");
     scene.camera.defocus = 0;
     scene.camera.pos.z = 2;
@@ -600,7 +599,7 @@ pub fn new_caffeine(alloc: *std.mem.Allocator) !Scene {
     return scene;
 }
 
-pub fn new_riboflavin(alloc: *std.mem.Allocator) !Scene {
+pub fn new_riboflavin(alloc: std.mem.Allocator) !Scene {
     var scene = try @import("mol.zig").from_mol_file(alloc, "data/riboflavin.mol");
     scene.camera.defocus = 0;
     scene.camera.pos = .{ .x = 1, .y = 2, .z = 5 };

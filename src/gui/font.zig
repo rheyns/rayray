@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("c");
 
 pub const Font = struct {
     width: u32,
@@ -20,12 +20,12 @@ pub const Font = struct {
             &font_bytes_per_pixel_,
         );
         return Font{
-            .width = @intCast(u32, font_width_),
-            .height = @intCast(u32, font_height_),
-            .pixels = @ptrCast([*]u8, font_pixels_ orelse {
+            .width = @as(u32, @intCast(font_width_)),
+            .height = @as(u32, @intCast(font_height_)),
+            .pixels = @as([*]u8, @ptrCast(font_pixels_ orelse {
                 std.debug.panic("Could not get font", .{});
-            }),
-            .bytes_per_pixel = @intCast(u32, font_bytes_per_pixel_),
+            })),
+            .bytes_per_pixel = @as(u32, @intCast(font_bytes_per_pixel_)),
         };
     }
 };

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("../c.zig");
+const c = @import("c");
 const vec3 = @import("vec3.zig");
 
 pub const Sphere = struct {
@@ -9,11 +9,11 @@ pub const Sphere = struct {
     center: c.vec3,
     radius: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(vec3.to_vec4(self.center, self.radius));
     }
     fn draw_gui(self: *Self) bool {
-        var changed = c.igDragFloat3("center", @ptrCast([*c]f32, &self.center), 0.05, -10, 10, "%.2f", 0);
+        var changed = c.igDragFloat3("center", @as([*c]f32, @ptrCast(&self.center)), 0.05, -10, 10, "%.2f", 0);
         changed = c.igDragFloat("radius", &self.radius, 0.01, 0, 10, "%.2f", 0) or changed;
         return changed;
     }
@@ -25,12 +25,12 @@ pub const InfinitePlane = struct {
     normal: c.vec3,
     offset: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(vec3.norm_to_vec4(self.normal, self.offset));
     }
 
     fn draw_gui(self: *Self) bool {
-        var changed = c.igDragFloat3("normal", @ptrCast([*c]f32, &self.normal), 0.01, -1, 1, "%.2f", 0);
+        var changed = c.igDragFloat3("normal", @as([*c]f32, @ptrCast(&self.normal)), 0.01, -1, 1, "%.2f", 0);
         changed = c.igDragFloat("offset", &self.offset, 0.01, -10, 10, "%.2f", 0) or changed;
         return changed;
     }
@@ -45,17 +45,17 @@ pub const FinitePlane = struct {
     q: c.vec3,
     bounds: c.vec4,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(vec3.norm_to_vec4(self.normal, self.offset));
         try buf.append(vec3.norm_to_vec4(self.q, -1));
         try buf.append(self.bounds);
     }
 
     fn draw_gui(self: *Self) bool {
-        var changed = c.igDragFloat3("normal", @ptrCast([*c]f32, &self.normal), 0.01, -1, 1, "%.2f", 0);
+        var changed = c.igDragFloat3("normal", @as([*c]f32, @ptrCast(&self.normal)), 0.01, -1, 1, "%.2f", 0);
         changed = c.igDragFloat("offset", &self.offset, 0.05, -10, 10, "%.2f", 0) or changed;
-        changed = c.igDragFloat3("q", @ptrCast([*c]f32, &self.q), 0.01, -1, 1, "%.2f", 0) or changed;
-        changed = c.igDragFloat4("bounds", @ptrCast([*c]f32, &self.bounds), 0.05, -10, 10, "%.2f", 0) or changed;
+        changed = c.igDragFloat3("q", @as([*c]f32, @ptrCast(&self.q)), 0.01, -1, 1, "%.2f", 0) or changed;
+        changed = c.igDragFloat4("bounds", @as([*c]f32, @ptrCast(&self.bounds)), 0.05, -10, 10, "%.2f", 0) or changed;
         return changed;
     }
 };
@@ -67,14 +67,14 @@ pub const Cylinder = struct {
     dir: c.vec3,
     radius: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(vec3.to_vec4(self.pos, self.radius));
         try buf.append(vec3.norm_to_vec4(self.dir, -1));
     }
 
     fn draw_gui(self: *Self) bool {
-        var changed = c.igDragFloat3("pos", @ptrCast([*c]f32, &self.pos), 0.05, -10, 10, "%.2f", 0);
-        changed = c.igDragFloat3("dir", @ptrCast([*c]f32, &self.dir), 0.01, -1, 1, "%.2f", 0) or changed;
+        var changed = c.igDragFloat3("pos", @as([*c]f32, @ptrCast(&self.pos)), 0.05, -10, 10, "%.2f", 0);
+        changed = c.igDragFloat3("dir", @as([*c]f32, @ptrCast(&self.dir)), 0.01, -1, 1, "%.2f", 0) or changed;
         changed = c.igDragFloat("radius", &self.radius, 0.01, 0, 10, "%.2f", 0) or changed;
         return changed;
     }
@@ -87,15 +87,15 @@ pub const CappedCylinder = struct {
     end: c.vec3,
     radius: f32,
 
-    fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         try buf.append(vec3.to_vec4(self.pos, self.radius));
         const delta = vec3.sub(self.end, self.pos);
         try buf.append(vec3.norm_to_vec4(delta, vec3.length(delta)));
     }
 
     fn draw_gui(self: *Self) bool {
-        var changed = c.igDragFloat3("pos", @ptrCast([*c]f32, &self.pos), 0.05, -10, 10, "%.2f", 0);
-        changed = c.igDragFloat3("end", @ptrCast([*c]f32, &self.end), 0.05, -10, 10, "%.2f", 0) or changed;
+        var changed = c.igDragFloat3("pos", @as([*c]f32, @ptrCast(&self.pos)), 0.05, -10, 10, "%.2f", 0);
+        changed = c.igDragFloat3("end", @as([*c]f32, @ptrCast(&self.end)), 0.05, -10, 10, "%.2f", 0) or changed;
         changed = c.igDragFloat("radius", &self.radius, 0.01, 0, 10, "%.2f", 0) or changed;
         return changed;
     }
@@ -169,7 +169,7 @@ pub const Primitive = union(enum) {
         };
     }
 
-    pub fn encode(self: Self, buf: *std.ArrayList(c.vec4)) !void {
+    pub fn encode(self: Self, buf: *std.array_list.Managed(c.vec4)) !void {
         return switch (self) {
             .Sphere => |s| s.encode(buf),
             .InfinitePlane => |s| s.encode(buf),

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const c = @import("../c.zig");
+const c = @import("c");
 const vec3 = @import("vec3.zig");
 const util = @import("../util.zig");
 
@@ -8,7 +8,7 @@ const Scene = @import("../scene.zig").Scene;
 const Shape = @import("shape.zig").Shape;
 const Material = @import("material.zig").Material;
 
-pub fn from_mol_file(alloc: *std.mem.Allocator, comptime f: []const u8) !Scene {
+pub fn from_mol_file(alloc: std.mem.Allocator, comptime f: []const u8) !Scene {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
@@ -39,30 +39,30 @@ const Element = enum {
     }
 };
 
-pub fn from_mol(alloc: *std.mem.Allocator, txt: []const u8) !Scene {
-    var iter = std.mem.split(txt, "\n");
+pub fn from_mol(alloc: std.mem.Allocator, txt: []const u8) !Scene {
+    var iter = std.mem.splitSequence(u8, txt, "\n");
 
     // Ignored header
-    const title = iter.next() orelse std.debug.panic("!", .{});
-    const timestamp = iter.next() orelse std.debug.panic("!", .{});
-    const comment = iter.next() orelse std.debug.panic("!", .{});
+    _ = iter.next() orelse std.debug.panic("!", .{});
+    _ = iter.next() orelse std.debug.panic("!", .{});
+    _ = iter.next() orelse std.debug.panic("!", .{});
 
     const counts = iter.next() orelse std.debug.panic("!", .{});
-    var count_iter = std.mem.tokenize(counts, " ");
+    var count_iter = std.mem.tokenizeAny(u8, counts, " ");
     const n_atoms = try std.fmt.parseUnsigned(u32, count_iter.next() orelse "0", 10);
     const n_bonds = try std.fmt.parseUnsigned(u32, count_iter.next() orelse "0", 10);
 
     var scene = Scene.new(alloc);
 
-    comptime const num_elems = std.meta.fields(Element).len;
+    const num_elems = @typeInfo(Element).@"enum".field_names.len;
     var mats: [num_elems]u32 = undefined;
     var i: u32 = 0;
     while (i < num_elems) : (i += 1) {
-        const o = @intToEnum(Element, @intCast(std.meta.TagType(Element), i)).color();
+        const o = @as(Element, @fromBackingInt(@intCast(@as(@typeInfo(Element).@"enum".tag_type, @intCast(i))))).color();
         mats[i] = try scene.new_material(Material.new_diffuse(o.x, o.y, o.z));
     }
 
-    const elements = std.ComptimeStringMap(Element, .{
+    const elements = std.StaticStringMap(Element).initComptime(.{
         .{ "O", .Oxygen },
         .{ "N", .Nitrogen },
         .{ "C", .Carbon },
@@ -72,14 +72,14 @@ pub fn from_mol(alloc: *std.mem.Allocator, txt: []const u8) !Scene {
     i = 0;
     while (i < n_atoms) : (i += 1) {
         const line = iter.next() orelse std.debug.panic("Missing atom\n", .{});
-        var line_iter = std.mem.tokenize(line, " ");
+        var line_iter = std.mem.tokenizeAny(u8, line, " ");
         const x = try std.fmt.parseFloat(f32, line_iter.next() orelse "");
         const y = try std.fmt.parseFloat(f32, line_iter.next() orelse "");
         const z = try std.fmt.parseFloat(f32, line_iter.next() orelse "");
         const elem = line_iter.next() orelse "";
         const e = elements.get(elem) orelse std.debug.panic("Unknown element {s}\n", .{elem});
         try scene.shapes.append(
-            Shape.new_sphere(.{ .x = x, .y = y, .z = z }, e.radius(), mats[@enumToInt(e)]),
+            Shape.new_sphere(.{ .x = x, .y = y, .z = z }, e.radius(), mats[@backingInt(e)]),
         );
     }
 
@@ -87,7 +87,7 @@ pub fn from_mol(alloc: *std.mem.Allocator, txt: []const u8) !Scene {
     i = 0;
     while (i < n_bonds) : (i += 1) {
         const line = iter.next() orelse std.debug.panic("Missing bond\n", .{});
-        var line_iter = std.mem.tokenize(line, " ");
+        var line_iter = std.mem.tokenizeAny(u8, line, " ");
         const a = try std.fmt.parseInt(u32, line_iter.next() orelse "", 10);
         const b = try std.fmt.parseInt(u32, line_iter.next() orelse "", 10);
         const n = try std.fmt.parseInt(u32, line_iter.next() orelse "", 10);

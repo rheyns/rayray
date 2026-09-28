@@ -1,16 +1,16 @@
 const std = @import("std");
 
-const c = @import("c.zig");
+const c = @import("c");
 const shaderc = @import("shaderc.zig");
 const Scene = @import("scene.zig").Scene;
 
 pub const AsyncShaderc = struct {
     const Self = @This();
 
-    alloc: *std.mem.Allocator,
+    alloc: std.mem.Allocator,
 
-    mutex: std.Thread.Mutex,
-    thread: *std.Thread,
+    mutex: std.Io.Mutex,
+    thread: ?std.Thread,
     cancelled: bool,
 
     device: c.WGPUDeviceId,
@@ -21,8 +21,8 @@ pub const AsyncShaderc = struct {
         return Self{
             .alloc = scene.alloc,
 
-            .mutex = std.Thread.Mutex{},
-            .thread = undefined, // defined in start()
+            .mutex = .init,
+            .thread = null,
 
             .scene = scene,
             .device = device,
@@ -32,12 +32,13 @@ pub const AsyncShaderc = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.thread.wait();
+        if (self.thread) |thread| thread.join();
+        if (self.out) |shader| c.wgpu_shader_module_destroy(shader);
         self.scene.deinit();
     }
 
     pub fn start(self: *Self) !void {
-        self.thread = try std.Thread.spawn(Self.run, self);
+        self.thread = try std.Thread.spawn(.{}, Self.run, .{self});
     }
 
     fn run(self: *Self) void {
@@ -62,14 +63,14 @@ pub const AsyncShaderc = struct {
             },
         );
 
-        const lock = self.mutex.acquire();
-        defer lock.release();
+        self.mutex.lockUncancelable(@import("runtime.zig").io);
+        defer self.mutex.unlock(@import("runtime.zig").io);
         self.out = comp_shader;
     }
 
     pub fn check(self: *Self) ?c.WGPUShaderModuleId {
-        const lock = self.mutex.acquire();
-        defer lock.release();
+        self.mutex.lockUncancelable(@import("runtime.zig").io);
+        defer self.mutex.unlock(@import("runtime.zig").io);
 
         // Steal the value from out
         const out = self.out;
