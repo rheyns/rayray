@@ -46,7 +46,7 @@ pub fn draw_enum_combo(comptime T: type, self: T) ?std.meta.Tag(T) {
             const is_selected = i == @enumToInt(self);
 
             const t = @ptrCast([*c]const u8, tags[i]);
-            if (c.igSelectableBool(t, is_selected, 0, .{ .x = 0, .y = 0 })) {
+            if (c.rrIgSelectable(t, is_selected, 0, 0, 0)) {
                 if (i != @enumToInt(self)) {
                     out = @intToEnum(std.meta.Tag(T), @intCast(TagIntType, i));
                 }

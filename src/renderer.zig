@@ -174,7 +174,7 @@ pub const Renderer = struct {
         changed = c.igDragFloat("scale", &self.uniforms.camera.scale, 0.05, 0, 10, "%.1f", 0) or changed;
         const w = width - c.igGetCursorPosX();
         c.igIndent(w * 0.25);
-        if (c.igButton("Reset", .{ .x = w * 0.5, .y = 0 })) {
+        if (c.rrIgButton("Reset", w * 0.5, 0)) {
             self.uniforms.camera = self.scene.camera;
             changed = true;
         }
@@ -187,15 +187,13 @@ pub const Renderer = struct {
 
         c.igPushStyleVarFloat(c.ImGuiStyleVar_WindowRounding, 0.0);
         c.igPushStyleVarFloat(c.ImGuiStyleVar_WindowBorderSize, 1.0);
-        c.igSetNextWindowPos(.{ .x = 0, .y = menu_height }, c.ImGuiCond_Always, .{ .x = 0, .y = 0 });
+        c.rrIgSetNextWindowPos(0, menu_height, c.ImGuiCond_Always, 0, 0);
         const window_size = c.igGetIO().*.DisplaySize;
-        c.igSetNextWindowSizeConstraints(.{
-            .x = 0,
-            .y = window_size.y - menu_height,
-        }, .{
-            .x = window_size.x / 2,
-            .y = window_size.y - menu_height,
-        }, null, null);
+        const max_width = window_size.x / 2;
+        const height = window_size.y - menu_height;
+        c.rrIgSetNextWindowSize(std.math.min(@as(f32, 280), max_width), height, c.ImGuiCond_FirstUseEver);
+        // Also recover a narrow layout saved by the old ARM64 ABI bug.
+        c.rrIgSetNextWindowSizeConstraints(std.math.min(@as(f32, 220), max_width), height, max_width, height);
         const flags = c.ImGuiWindowFlags_NoTitleBar |
             c.ImGuiWindowFlags_NoMove |
             c.ImGuiWindowFlags_NoCollapse;

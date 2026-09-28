@@ -257,7 +257,7 @@ pub const Scene = struct {
 
             const w = width - c.igGetCursorPosX();
             c.igIndent(w * 0.25);
-            if (c.igButton("Delete", .{ .x = w * 0.5, .y = 0 })) {
+            if (c.rrIgButton("Delete", w * 0.5, 0)) {
                 changed = true;
                 self.del_shape(i);
             }
@@ -267,7 +267,7 @@ pub const Scene = struct {
         }
         const w = width - c.igGetCursorPosX();
         c.igIndent(w * 0.25);
-        if (c.igButton("Add shape", .{ .x = w * 0.5, .y = 0 })) {
+        if (c.rrIgButton("Add shape", w * 0.5, 0)) {
             try self.shapes.append(Shape.new_sphere(.{ .x = 0, .y = 0, .z = 0 }, 1, 0));
             changed = true;
         }
@@ -289,7 +289,7 @@ pub const Scene = struct {
             const w = width - c.igGetCursorPosX();
             c.igIndent(w * 0.25);
             if (self.materials.items.len > 1 and
-                c.igButton("Delete", .{ .x = w * 0.5, .y = 0 }))
+                c.rrIgButton("Delete", w * 0.5, 0))
             {
                 changed = true;
                 self.del_material(i);
@@ -301,7 +301,7 @@ pub const Scene = struct {
 
         const w = c.igGetWindowWidth() - c.igGetCursorPosX();
         c.igIndent(w * 0.25);
-        if (c.igButton("Add material", .{ .x = w * 0.5, .y = 0 })) {
+        if (c.rrIgButton("Add material", w * 0.5, 0)) {
             _ = try self.new_material(Material.new_diffuse(1, 1, 1));
             changed = true;
         }

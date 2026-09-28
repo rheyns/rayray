@@ -63,6 +63,7 @@ pub fn build(b: *Builder) void {
         "-DIMGUI_IMPL_API=extern \"C\"",
     };
     const imgui_files = [_][]const u8{
+        "extern/imgui_bridge.cpp",
         "vendor/cimgui/cimgui.cpp",
         "vendor/cimgui/imgui/imgui.cpp",
         "vendor/cimgui/imgui/imgui_draw.cpp",

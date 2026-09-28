@@ -17,6 +17,7 @@ pub usingnamespace @cImport({
     @cInclude("cimgui/cimgui.h");
     @cInclude("cimgui/generator/output/cimgui_impl.h");
     @cInclude("cimgui_ft/cimgui_ft.h");
+    @cInclude("extern/imgui_bridge.h");
 
     // Shared C/GLSL structs
     @cInclude("extern/rayray.h");
