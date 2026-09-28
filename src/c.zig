@@ -5,6 +5,7 @@ pub usingnamespace @cImport({
     // System libraries
     @cInclude("GLFW/glfw3.h");
     @cInclude("png.h");
+    @cInclude("dlfcn.h");
 
     // Vendored libraries
     @cInclude("wgpu/wgpu.h");

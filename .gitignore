@@ -1,3 +1,9 @@
 zig-cache
 imgui.ini
 .DS_Store
+
+# Local compiler and generated build/render artifacts
+.tools/
+zig-out/
+out.png
+artifacts/

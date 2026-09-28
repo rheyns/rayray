@@ -34,6 +34,9 @@ pub const Window = struct {
     total_samples: ?u32,
 
     pub fn init(alloc: *std.mem.Allocator, options_: Options, name: [*c]const u8) !*Self {
+        // WGPU owns the Metal layer. An OpenGL context would also update the
+        // Cocoa view during resize and overwrite the presented Metal content.
+        c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
         const window = c.glfwCreateWindow(
             @intCast(c_int, options_.width),
             @intCast(c_int, options_.height),
@@ -43,7 +46,7 @@ pub const Window = struct {
         ) orelse {
             var err_str: [*c]u8 = null;
             const err = c.glfwGetError(&err_str);
-            std.debug.panic("Failed to open window: {} ({})", .{ err, err_str });
+            std.debug.panic("Failed to open window: {} ({s})", .{ err, err_str });
         };
 
         var width_: c_int = undefined;

@@ -37,7 +37,7 @@ pub const AsyncShaderc = struct {
     }
 
     pub fn start(self: *Self) !void {
-        self.thread = try std.Thread.spawn(self, Self.run);
+        self.thread = try std.Thread.spawn(Self.run, self);
     }
 
     fn run(self: *Self) void {

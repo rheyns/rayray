@@ -49,8 +49,9 @@ pub const Backend = struct {
         const tmp_alloc: *std.mem.Allocator = &arena.allocator;
         defer arena.deinit();
 
-        // We lie and pretend to be OpenGL here
-        _ = c.ImGui_ImplGlfw_InitForOpenGL(window, true);
+        // This ImGui version uses its Vulkan entry point for windows without
+        // an OpenGL context; rendering is provided by our WGPU backend.
+        _ = c.ImGui_ImplGlfw_InitForVulkan(window, true);
 
         // Use the Inconsolata font for the GUI, instead of Proggy Clean
         var io = c.igGetIO() orelse std.debug.panic("Could not get io\n", .{});

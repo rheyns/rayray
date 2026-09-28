@@ -29,6 +29,49 @@ A tiny GPU raytracer!
 - Vaguely based on [_Ray Tracing in One Weekend_](https://raytracing.github.io/books/RayTracingInOneWeekend.html),
   with a data-driven design to run on the GPU.
 
+## Building on Apple Silicon
+
+This branch builds with the native ARM64 **Zig 0.8.0** release. Newer Zig
+releases have incompatible language and standard library changes.
+Install Homebrew dependencies and initialize the pinned ImGui submodules:
+
+```sh
+brew install glfw libpng freetype shaderc
+git submodule update --init --recursive
+```
+
+Keep the compiler inside the project so the build does not depend on a temporary
+directory:
+
+```sh
+mkdir -p .tools
+curl -fL https://ziglang.org/download/0.8.0/zig-macos-aarch64-0.8.0.tar.xz -o .tools/zig-0.8.0.tar.xz
+tar -xf .tools/zig-0.8.0.tar.xz -C .tools
+```
+
+With Rust/Cargo installed, build the pinned native WebGPU library once, then
+build and run rayray from the project directory:
+
+```sh
+make -C vendor wgpu
+.tools/zig-macos-aarch64-0.8.0/zig build
+./zig-out/bin/rayray
+# Render the default Cornell Box to out.png and exit:
+./zig-out/bin/rayray -n 1024
+```
+
+The build uses Homebrew at `/opt/homebrew` (or `HOMEBREW_PREFIX` when set).
+Keep `vendor/wgpu/libwgpu_native.dylib` alongside the project: the executable
+loads it relative to `zig-out/bin`. The compiler, dependencies, executable and
+render output can all remain in this directory across reboots; generated files
+are ignored by Git.
+
+The window uses `GLFW_NO_API` because WebGPU owns its Metal layer. Creating an
+OpenGL context as well lets Cocoa overwrite the displayed content on resize.
+To check the resize path, launch the interactive app, resize it wider, then
+taller, and restore its original size. The scene and GUI should stay visible,
+with sampling restarting at each new size.
+
 ## Project status
 ![Project unsupported](https://img.shields.io/badge/project-unsupported-red.svg)
 

@@ -58,7 +58,7 @@ pub const Debounce = struct {
             if (self.thread) |thread| {
                 thread.wait();
             }
-            self.thread = try std.Thread.spawn(self, Self.run);
+            self.thread = try std.Thread.spawn(Self.run, self);
             self.thread_running = true;
         } else {
             // The already-running thread will handle it

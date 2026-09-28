@@ -77,7 +77,7 @@ pub fn from_mol(alloc: *std.mem.Allocator, txt: []const u8) !Scene {
         const y = try std.fmt.parseFloat(f32, line_iter.next() orelse "");
         const z = try std.fmt.parseFloat(f32, line_iter.next() orelse "");
         const elem = line_iter.next() orelse "";
-        const e = elements.get(elem) orelse std.debug.panic("Unknown element {}\n", .{elem});
+        const e = elements.get(elem) orelse std.debug.panic("Unknown element {s}\n", .{elem});
         try scene.shapes.append(
             Shape.new_sphere(.{ .x = x, .y = y, .z = z }, e.radius(), mats[@enumToInt(e)]),
         );
